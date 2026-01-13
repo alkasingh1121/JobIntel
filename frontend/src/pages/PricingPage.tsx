@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 import SubscribeForm from '@/components/SubscribeForm';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -18,6 +20,61 @@ import {
 } from 'lucide-react';
 
 const PricingPage = () => {
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !(window as any).Razorpay) {
+      const s = document.createElement('script');
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      s.async = true;
+      document.body.appendChild(s);
+    }
+  }, []);
+
+  const handleBuy = async (planId: string) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const resp = await fetch('/api/payments/create-order', { method: 'POST', headers, body: JSON.stringify({ planId }) });
+      if (!resp.ok) throw new Error(await resp.text());
+      const json = await resp.json();
+      const { order, key } = json;
+
+      const options: any = {
+        key,
+        amount: order.amount,
+        order_id: order.id,
+        currency: order.currency || 'INR',
+        name: 'JobIntel Premium',
+        description: 'Yearly Premium',
+        handler: async function (response: any) {
+          try {
+            const vresp = await fetch('/api/payments/verify', { method: 'POST', headers, body: JSON.stringify(response) });
+            if (!vresp.ok) throw new Error(await vresp.text());
+            toast({ title: 'Payment successful', variant: 'default' });
+            window.location.reload();
+          } catch (e) {
+            toast({ title: 'Verification failed', description: String(e), variant: 'destructive' });
+          }
+        },
+        prefill: {},
+        theme: { color: '#3b82f6' },
+      };
+
+      // @ts-ignore
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error('Buy failed', err);
+      toast({ title: 'Purchase failed', description: String(err), variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
   const plans = [
     {
       name: 'Free',
@@ -41,9 +98,9 @@ const PricingPage = () => {
     },
     {
       name: 'Premium',
-      price: '₹499',
-      period: 'per month',
-      description: 'For serious job seekers',
+      price: '₹99',
+      period: 'per year',
+      description: 'Yearly Premium — best for committed job seekers',
       badge: { text: 'Most Popular', variant: 'premium' as const },
       buttonVariant: 'premium' as const,
       buttonText: 'Start Free Trial',
@@ -110,6 +167,8 @@ const PricingPage = () => {
     },
   ];
 
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
@@ -162,12 +221,20 @@ const PricingPage = () => {
                   <p className="text-sm text-muted-foreground">{plan.description}</p>
                 </div>
 
-                <Link to="/register">
-                  <Button variant={plan.buttonVariant} className="w-full mb-6">
+                {/* Premium should start checkout; other plans go to register */}
+                {plan.name === 'Premium' ? (
+                  <Button variant={plan.buttonVariant} className="w-full mb-6" onClick={() => handleBuy('premium')} disabled={loading}>
                     {plan.buttonText}
                     <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
-                </Link>
+                ) : (
+                  <Link to="/register">
+                    <Button variant={plan.buttonVariant} className="w-full mb-6">
+                      {plan.buttonText}
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </Link>
+                )}
 
                 <ul className="space-y-3">
                   {plan.features.map((feature, i) => (

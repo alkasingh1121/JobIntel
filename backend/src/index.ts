@@ -10,6 +10,7 @@ import applicationRoutes from "./routes/application";
 import seoRoutes from "./routes/seo";
 import openapiRoutes from "./routes/openapi";
 import notificationRoutes from "./routes/notification";
+import paymentsRoutes from "./routes/payments";
 import aiRoutes from "./routes/ai";
 import adminRoutes from "./routes/admin";
 import sourceAdminRoutes from "./routes/source";
@@ -22,7 +23,11 @@ const log = debug("jobintel:server");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Capture raw body for webhook signature verification
+app.use(express.json({ verify: (req: any, _res, buf: Buffer, _encoding) => {
+  // store raw body string for use in webhook verification
+  req.rawBody = buf && buf.toString();
+}}));
 
 app.get("/api/health", async (_req, res) => {
   // Basic healthy probe
@@ -69,8 +74,7 @@ app.use("/api/companies", companyRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/docs", openapiRoutes);
 app.use(seoRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use('/api/admin', sourceAdminRoutes);
+app.use("/api/notifications", notificationRoutes);app.use('/api/payments', paymentsRoutes);app.use('/api/admin', sourceAdminRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/ai', aiRoutes);
