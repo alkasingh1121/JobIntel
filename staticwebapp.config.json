@@ -1,5 +1,16 @@
 {
-  "env": {
-    "VITE_API_URL": "https://backend-jobintel-fhbecsfnatdkfwas.centralindia-01.azurewebsites.net"
+  "routes": [
+    {
+      "route": "/*",
+      "serve": "/index.html",
+      "statusCode": 200
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/api/*"]
+  },
+  "mimeTypes": {
+    ".json": "application/json"
   }
 }
