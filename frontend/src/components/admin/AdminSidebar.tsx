@@ -36,9 +36,10 @@ export function AdminSidebar() {
   const location = useLocation();
 
   return (
+    // hide regular sidebar on small screens; show on lg+
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300',
+        'hidden lg:flex fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >

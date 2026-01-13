@@ -47,8 +47,8 @@ const LandingPage = () => {
     },
     {
       icon: Rocket,
-      title: 'Auto-Apply (Ultra)',
-      description: 'Let our AI apply to jobs on your behalf with personalized cover letters.',
+      title: 'Auto-Apply (Premium)',
+      description: 'Let our AI apply to jobs on your behalf with personalized cover letters. (Premium feature)',
     },
     {
       icon: Shield,

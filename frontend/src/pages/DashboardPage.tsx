@@ -299,15 +299,15 @@ const DashboardPage = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {user.tier !== 'ultra' && (
+            {user.tier === 'free' && (
               <Link to="/pricing">
-                <Button variant={user.tier === 'free' ? 'premium' : 'ultra'}>
+                <Button variant="premium">
                   <Crown className="h-4 w-4 mr-2" />
-                  Upgrade to {user.tier === 'free' ? 'Premium' : 'Ultra'}
+                  Upgrade to Premium
                 </Button>
               </Link>
             )}
-            <Badge variant={user.tier === 'ultra' ? 'ultra' : user.tier === 'premium' ? 'premium' : 'free'} className="py-1.5">
+            <Badge variant={user.tier === 'premium' ? 'premium' : 'free'} className="py-1.5">
               {user.tier.charAt(0).toUpperCase() + user.tier.slice(1)}
             </Badge>
           </div>

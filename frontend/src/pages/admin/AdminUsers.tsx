@@ -28,12 +28,12 @@ import {
 
 // Mock user data
 const mockUsers = [
-  { id: '1', name: 'John Doe', email: 'john@example.com', tier: 'ultra', joinedAt: '2024-01-05', applications: 12, lastActive: '2 hours ago' },
+  { id: '1', name: 'John Doe', email: 'john@example.com', tier: 'premium', joinedAt: '2024-01-05', applications: 12, lastActive: '2 hours ago' },
   { id: '2', name: 'Jane Smith', email: 'jane@example.com', tier: 'premium', joinedAt: '2024-01-08', applications: 8, lastActive: '5 hours ago' },
   { id: '3', name: 'Mike Johnson', email: 'mike@example.com', tier: 'free', joinedAt: '2024-01-10', applications: 3, lastActive: '1 day ago' },
   { id: '4', name: 'Sarah Wilson', email: 'sarah@example.com', tier: 'premium', joinedAt: '2024-01-12', applications: 15, lastActive: '30 mins ago' },
   { id: '5', name: 'Alex Brown', email: 'alex@example.com', tier: 'free', joinedAt: '2024-01-15', applications: 1, lastActive: '3 days ago' },
-  { id: '6', name: 'Emily Davis', email: 'emily@example.com', tier: 'ultra', joinedAt: '2024-01-18', applications: 22, lastActive: '1 hour ago' },
+  { id: '6', name: 'Emily Davis', email: 'emily@example.com', tier: 'premium', joinedAt: '2024-01-18', applications: 22, lastActive: '1 hour ago' },
   { id: '7', name: 'Chris Lee', email: 'chris@example.com', tier: 'free', joinedAt: '2024-01-20', applications: 0, lastActive: 'Just now' },
   { id: '8', name: 'Lisa Chen', email: 'lisa@example.com', tier: 'premium', joinedAt: '2024-01-22', applications: 6, lastActive: '4 hours ago' },
 ];
@@ -41,19 +41,16 @@ const mockUsers = [
 const tierColors: Record<string, string> = {
   free: 'bg-gray-100 text-gray-800',
   premium: 'bg-purple-100 text-purple-800',
-  ultra: 'bg-amber-100 text-amber-800',
 };
 
 const tierIcons: Record<string, React.ReactNode> = {
   free: <Users className="h-3 w-3" />,
   premium: <Crown className="h-3 w-3" />,
-  ultra: <Zap className="h-3 w-3" />,
 };
 
 const pieData = [
-  { name: 'Free', value: adminStats.totalUsers - adminStats.premiumUsers - adminStats.ultraUsers, color: 'hsl(var(--muted-foreground))' },
+  { name: 'Free', value: Math.max(0, adminStats.totalUsers - adminStats.premiumUsers), color: 'hsl(var(--muted-foreground))' },
   { name: 'Premium', value: adminStats.premiumUsers, color: '#8b5cf6' },
-  { name: 'Ultra', value: adminStats.ultraUsers, color: '#f59e0b' },
 ];
 
 export default function AdminUsers() {
@@ -80,7 +77,7 @@ export default function AdminUsers() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
@@ -108,13 +105,13 @@ export default function AdminUsers() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-amber-600" />
-              <span className="text-sm text-muted-foreground">Ultra Users</span>
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              <span className="text-sm text-muted-foreground">Applications Today</span>
             </div>
             <div className="mt-2 text-3xl font-bold text-foreground">
-              {adminStats.ultraUsers.toLocaleString()}
+              {adminStats.applicationsToday.toLocaleString()}
             </div>
-            <p className="text-sm text-green-600">+32% from last month</p>
+            <p className="text-sm text-green-600">Realtime count</p>
           </CardContent>
         </Card>
         <Card>
@@ -151,7 +148,6 @@ export default function AdminUsers() {
                   />
                   <Line type="monotone" dataKey="free" stroke="hsl(var(--muted-foreground))" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="premium" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="ultra" stroke="#f59e0b" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -195,7 +191,7 @@ export default function AdminUsers() {
         </Card>
       </div>
 
-      {/* Users Table */}
+      {/* Users Table (desktop) and Cards (mobile) */}
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -217,7 +213,27 @@ export default function AdminUsers() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          {/* Mobile: stacked cards */}
+          <div className="space-y-3 md:hidden">
+            {filteredUsers.map((u) => (
+              <div key={u.id} className="bg-card rounded-lg p-4 border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="font-medium">{u.name}</div>
+                    <div className="text-sm text-muted-foreground">{u.email}</div>
+                  </div>
+                  <Badge className={tierColors[u.tier]}>{u.tier.charAt(0).toUpperCase() + u.tier.slice(1)}</Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <div>Joined: {u.joinedAt}</div>
+                  <div>Apps: {u.applications}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop/table view */}
+          <div className="hidden md:block rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>

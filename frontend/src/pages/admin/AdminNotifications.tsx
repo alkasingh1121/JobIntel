@@ -403,12 +403,6 @@ export default function AdminNotifications() {
                           Premium Users
                         </span>
                       </SelectItem>
-                      <SelectItem value="ultra">
-                        <span className="flex items-center gap-2">
-                          <Zap className="h-4 w-4" />
-                          Ultra Users
-                        </span>
-                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
