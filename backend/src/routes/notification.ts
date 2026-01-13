@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { sendNotification } from "../controllers/notificationController";
+import { sendNotification, previewNotification } from "../controllers/notificationController";
 import { authenticateToken, requireRole } from "../middleware/auth";
 import IORedis from "ioredis";
 
@@ -9,6 +9,8 @@ const router = Router();
 
 // Only admin can trigger bulk notifications for jobs
 router.post("/send", authenticateToken, requireRole('admin'), sendNotification);
+// Preview recipients without enqueuing
+router.post('/preview', authenticateToken, requireRole('admin'), previewNotification);
 
 // Server-Sent Events stream for realtime notifications
 router.get('/stream', async (req, res) => {

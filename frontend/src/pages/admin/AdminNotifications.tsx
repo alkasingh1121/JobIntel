@@ -73,6 +73,8 @@ export default function AdminNotifications() {
     },
     targetAudience: 'all',
   });
+  const [previewResult, setPreviewResult] = useState<any | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [stats, setStats] = useState<any | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -111,60 +113,109 @@ export default function AdminNotifications() {
     load();
   }, [toast]);
 
-  const handleSubmit = async () => {
-    // enqueue notifications for selected channels
+  const buildPayload = () => {
+    const channels = Object.entries(formData.channels).filter(([_, v]) => v).map(([k]) => k);
+    if (!formData.title.trim() || !formData.message.trim()) {
+      throw new Error('Title and message required');
+    }
+    const base: any = { title: formData.title, message: formData.message, preferredChannels: channels };
+
+    if (recipientMode === 'audience') {
+      base.targetAudience = formData.targetAudience;
+    } else if (recipientMode === 'all') {
+      base.targetAudience = 'all';
+    } else if (recipientMode === 'applicants_one') {
+      if (!selectedJobId) throw new Error('Select a job');
+      base.jobId = selectedJobId;
+    } else if (recipientMode === 'applicants_many') {
+      if (!selectedJobIds || selectedJobIds.length === 0) throw new Error('Select one or more jobs');
+      base.jobIds = selectedJobIds;
+    }
+
+    return base;
+  };
+
+  const sendPayload = async (base: any) => {
     const token = localStorage.getItem('token');
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
 
-    const channels = Object.entries(formData.channels).filter(([_, v]) => v).map(([k]) => k);
+    const resp = await fetch('/api/notifications/send', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(base),
+    });
 
-    if (!formData.title.trim() || !formData.message.trim()) {
-      toast({ title: 'Title and message required', variant: 'destructive' });
-      return;
-    }
+    if (!resp.ok) throw new Error(await resp.text());
 
+    toast({ title: 'Notification enqueued' });
+    const [sres, nres] = await Promise.all([
+      fetch('/api/admin/stats', { headers }),
+      fetch('/api/admin/notifications', { headers }),
+    ]);
+    if (sres.ok) setStats(await sres.json());
+    if (nres.ok) setNotifications(await nres.json());
+
+    setIsCreateOpen(false);
+    setFormData({ title: '', message: '', channels: { email: true, whatsapp: false, telegram: false }, targetAudience: 'all' });
+    setSelectedJobId(null);
+    setSelectedJobIds([]);
+    setRecipientMode('audience');
+    setPreviewResult(null);
+  };
+
+  const handleSubmit = async () => {
     try {
-      // build base payload
-      const base: any = { title: formData.title, message: formData.message, preferredChannels: channels };
-
-      if (recipientMode === 'audience') {
-        base.targetAudience = formData.targetAudience;
-      } else if (recipientMode === 'all') {
-        base.targetAudience = 'all';
-      } else if (recipientMode === 'applicants_one') {
-        if (!selectedJobId) { toast({ title: 'Select a job', variant: 'destructive' }); return; }
-        base.jobId = selectedJobId;
-      } else if (recipientMode === 'applicants_many') {
-        if (!selectedJobIds || selectedJobIds.length === 0) { toast({ title: 'Select one or more jobs', variant: 'destructive' }); return; }
-        base.jobIds = selectedJobIds;
-      }
-
-      const resp = await fetch('/api/notifications/send', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(base),
-      });
-
-      if (!resp.ok) throw new Error(await resp.text());
-
-      toast({ title: 'Notification enqueued' });
-      // refresh stats and notifications
-      const [sres, nres] = await Promise.all([
-        fetch('/api/admin/stats', { headers }),
-        fetch('/api/admin/notifications', { headers }),
-      ]);
-      if (sres.ok) setStats(await sres.json());
-      if (nres.ok) setNotifications(await nres.json());
-
-      setIsCreateOpen(false);
-      setFormData({ title: '', message: '', channels: { email: true, whatsapp: false, telegram: false }, targetAudience: 'all' });
-      setSelectedJobId(null);
-      setSelectedJobIds([]);
-      setRecipientMode('audience');
+      const base = buildPayload();
+      await sendPayload(base);
     } catch (err: any) {
       console.error('Send failed', err);
       toast({ title: 'Send failed', description: String(err), variant: 'destructive' });
+    }
+  };
+
+  const handlePreview = async () => {
+    setPreviewLoading(true);
+    setPreviewResult(null);
+    try {
+      const base = buildPayload();
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const resp = await fetch('/api/notifications/preview', { method: 'POST', headers, body: JSON.stringify(base) });
+      if (!resp.ok) throw new Error(await resp.text());
+      const json = await resp.json();
+      setPreviewResult(json);
+    } catch (err: any) {
+      console.error('Preview failed', err);
+      toast({ title: 'Preview failed', description: String(err), variant: 'destructive' });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handlePreviewAndSend = async () => {
+    setPreviewLoading(true);
+    try {
+      const base = buildPayload();
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const presp = await fetch('/api/notifications/preview', { method: 'POST', headers, body: JSON.stringify(base) });
+      if (!presp.ok) throw new Error(await presp.text());
+      const pjson = await presp.json();
+      setPreviewResult(pjson);
+      if (!pjson.recipients || pjson.recipients === 0) {
+        toast({ title: 'No recipients found', variant: 'destructive' });
+        return;
+      }
+      // send
+      await sendPayload(base);
+    } catch (err: any) {
+      console.error('Preview & Send failed', err);
+      toast({ title: 'Preview & Send failed', description: String(err), variant: 'destructive' });
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -189,14 +240,15 @@ export default function AdminNotifications() {
               New Notification
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[900px] w-full">
             <DialogHeader>
               <DialogTitle>Create Notification</DialogTitle>
               <DialogDescription>
                 Compose and send a notification to your users across multiple channels.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -206,73 +258,7 @@ export default function AdminNotifications() {
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="message">Message</Label>
-                <Textarea
-                  id="message"
-                  placeholder="Your notification message..."
-                  value={formData.message}
-                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                  className="min-h-[120px]"
-                />
-              </div>
-              {/* Recipients selection */}
-              <div className="space-y-2">
-                <Label>Recipients</Label>
-                <div className="flex flex-col gap-2">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="recipients" checked={recipientMode === 'audience'} onChange={() => setRecipientMode('audience')} />
-                    <span className="ml-2">Target audience (all/free/premium/ultra)</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="recipients" checked={recipientMode === 'all'} onChange={() => setRecipientMode('all')} />
-                    <span className="ml-2">All users</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="recipients" checked={recipientMode === 'applicants_one'} onChange={() => setRecipientMode('applicants_one')} />
-                    <span className="ml-2">Applicants for one job</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="recipients" checked={recipientMode === 'applicants_many'} onChange={() => setRecipientMode('applicants_many')} />
-                    <span className="ml-2">Applicants for multiple jobs</span>
-                  </label>
-                </div>
 
-                {recipientMode === 'applicants_one' && (
-                  <div className="mt-2">
-                    <Label>Select job</Label>
-                    <Select value={selectedJobId ?? ""} onValueChange={(v) => setSelectedJobId(v || null)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select job" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {jobs.map((j) => (
-                          <SelectItem key={j._id} value={j._id}>{j.title}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {recipientMode === 'applicants_many' && (
-                  <div className="mt-2 space-y-2">
-                    <Label>Select multiple jobs</Label>
-                    <div className="max-h-40 overflow-auto border rounded p-2">
-                      {jobs.map((j) => (
-                        <label key={j._id} className="flex items-center gap-2 mb-1">
-                          <input type="checkbox" checked={selectedJobIds.includes(j._id)} onChange={(e) => {
-                            if (e.target.checked) setSelectedJobIds([...selectedJobIds, j._id]);
-                            else setSelectedJobIds(selectedJobIds.filter(x => x !== j._id));
-                          }} />
-                          <span className="ml-2">{j.title}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Channels */}
               <div className="space-y-2">
                 <Label>Channels</Label>
                 <div className="flex gap-4">
@@ -317,42 +303,143 @@ export default function AdminNotifications() {
                   </label>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Target Audience</Label>
-                <Select
-                  value={formData.targetAudience}
-                  onValueChange={(value) => setFormData({ ...formData, targetAudience: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select audience" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">
-                      <span className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        All Users
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="free">
-                      <span className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        Free Users Only
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="premium">
-                      <span className="flex items-center gap-2">
-                        <Crown className="h-4 w-4" />
-                        Premium Users
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="ultra">
-                      <span className="flex items-center gap-2">
-                        <Zap className="h-4 w-4" />
-                        Ultra Users
-                      </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <div className="col-span-2 space-y-2">
+                <Label htmlFor="message">Message</Label>
+                <Textarea
+                  id="message"
+                  placeholder="Your notification message..."
+                  value={formData.message}
+                  onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                  className="min-h-[80px]"
+                />
+              </div>
+
+              <div className="col-span-2 space-y-2">
+                <Label>Recipients</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="recipients" checked={recipientMode === 'audience'} onChange={() => setRecipientMode('audience')} />
+                      <span className="ml-2">Target audience (all/free/premium/ultra)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="recipients" checked={recipientMode === 'all'} onChange={() => setRecipientMode('all')} />
+                      <span className="ml-2">All users</span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="recipients" checked={recipientMode === 'applicants_one'} onChange={() => setRecipientMode('applicants_one')} />
+                      <span className="ml-2">Applicants for one job</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="radio" name="recipients" checked={recipientMode === 'applicants_many'} onChange={() => setRecipientMode('applicants_many')} />
+                      <span className="ml-2">Applicants for multiple jobs</span>
+                    </label>
+                  </div>
+
+                </div>
+
+                {recipientMode === 'applicants_one' && (
+                  <div className="mt-2">
+                    <Label>Select job</Label>
+                    <Select value={selectedJobId ?? ""} onValueChange={(v) => setSelectedJobId(v || null)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select job" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {jobs.map((j) => (
+                          <SelectItem key={j._id} value={j._id}>{j.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {recipientMode === 'applicants_many' && (
+                  <div className="mt-2 space-y-2">
+                    <Label>Select multiple jobs</Label>
+                    <div className="max-h-40 overflow-auto border rounded p-2">
+                      {jobs.map((j) => (
+                        <label key={j._id} className="flex items-center gap-2 mb-1">
+                          <input type="checkbox" checked={selectedJobIds.includes(j._id)} onChange={(e) => {
+                            if (e.target.checked) setSelectedJobIds([...selectedJobIds, j._id]);
+                            else setSelectedJobIds(selectedJobIds.filter(x => x !== j._id));
+                          }} />
+                          <span className="ml-2">{j.title}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-2">
+                  <Label>Target Audience</Label>
+                  <Select
+                    value={formData.targetAudience}
+                    onValueChange={(value) => setFormData({ ...formData, targetAudience: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select audience" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">
+                        <span className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          All Users
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="free">
+                        <span className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          Free Users Only
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="premium">
+                        <span className="flex items-center gap-2">
+                          <Crown className="h-4 w-4" />
+                          Premium Users
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ultra">
+                        <span className="flex items-center gap-2">
+                          <Zap className="h-4 w-4" />
+                          Ultra Users
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Preview box */}
+                {previewResult && (
+                  <div className="col-span-2">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Preview</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <div>Recipients: <strong>{previewResult.recipients}</strong></div>
+                          <div className="text-sm text-muted-foreground">Sample (up to 5)</div>
+                        </div>
+                        <div className="mt-2">
+                          {previewResult.sample && previewResult.sample.length > 0 ? (
+                            <ul className="list-disc pl-5">
+                              {previewResult.sample.map((s: any) => (
+                                <li key={s._id}>{s.name ?? s.email}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="text-sm text-muted-foreground">No samples available</div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
             </div>
             <DialogFooter className="gap-2">
@@ -362,6 +449,34 @@ export default function AdminNotifications() {
               <Button variant="outline">
                 <Clock className="mr-2 h-4 w-4" />
                 Schedule
+              </Button>
+              <Button variant="outline" onClick={async () => {
+                try {
+                  await handlePreview();
+                } catch (e) { /* ignore */ }
+              }}>
+                Preview
+              </Button>
+              <Button onClick={async () => { await handlePreviewAndSend(); }}>
+                Preview &amp; Send {previewResult ? `(${previewResult.recipients})` : ''}
+              </Button>
+              <Button variant="ghost" onClick={async () => {
+                // prompt for test email and send
+                const to = window.prompt('Send test email to (address)');
+                if (!to) return;
+                try {
+                  const token = localStorage.getItem('token');
+                  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                  if (token) headers.Authorization = `Bearer ${token}`;
+                  const body = { to, subject: formData.title || 'Test Notification', message: formData.message || 'Test message' };
+                  const resp = await fetch('/api/admin/notifications/test-email', { method: 'POST', headers, body: JSON.stringify(body) });
+                  if (!resp.ok) throw new Error(await resp.text());
+                  toast({ title: 'Test email sent' });
+                } catch (err) {
+                  toast({ title: 'Test send failed', description: String(err), variant: 'destructive' });
+                }
+              }}>
+                Send Test Email
               </Button>
               <Button onClick={handleSubmit}>
                 <Send className="mr-2 h-4 w-4" />

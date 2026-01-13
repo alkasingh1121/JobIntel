@@ -92,5 +92,9 @@ const MONGODB_URI = process.env.MONGODB_URI || "";
     log(`Backend listening on http://localhost:${PORT}`);
     // eslint-disable-next-line no-console
     console.log(`Backend listening on http://localhost:${PORT}`);
+
+    // Log SMTP status (do not print secret)
+    const smtpConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER);
+    console.log('SMTP configured:', smtpConfigured ? `yes (${process.env.SMTP_USER})` : 'no');
   });
 })();
