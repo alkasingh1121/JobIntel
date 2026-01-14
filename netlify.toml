@@ -1,11 +1,14 @@
-# Netlify config for frontend
-[build]
-  command = "npm ci && npm run build"
-  publish = "dist"
+# Netlify config for JobIntel monorepo
 
-[build.environment]
-  # Set this in Netlify UI to the deployed backend URL (do NOT commit secrets here)
-  VITE_API_URL = "https://<your-backend>.onrender.com"
+[build]
+  command = "npm ci && npm run build -w frontend"
+  publish = "frontend/dist"
+  functions = "frontend/netlify/functions"
+
+# IMPORTANT: Do NOT set VITE_API_URL here. Set VITE_API_URL in Netlify site UI (Site › Site settings › Build & deploy › Environment).
+# Example (DO NOT UNCOMMENT/COMMIT):
+# [build.environment]
+#   VITE_API_URL = "https://jobintel-backend.onrender.com"
 
 [[redirects]]
   from = "/*"
