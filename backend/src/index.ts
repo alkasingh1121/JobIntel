@@ -27,6 +27,19 @@ const corsOrigin = process.env.CORS_ORIGIN;
 if (corsOrigin) {
   const origins = corsOrigin.split(',').map((s) => s.trim());
   app.use(cors({ origin: origins, credentials: true }));
+  // Extra middleware to explicitly set CORS response headers for allowed origins
+  app.use((req, res, next) => {
+    const origin = req.headers.origin as string | undefined;
+    if (origin && origins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+    // Handle preflight
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
 } else {
   // Default to permissive for local dev
   app.use(cors());
