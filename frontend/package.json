@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite",
+    "dev:remote": "VITE_API_URL=https://jobintel-backend.onrender.com vite",
     "generate:sitemap": "node scripts/generate-sitemap.js",
     "build": "vite build",
     "build:dev": "vite build --mode development",
