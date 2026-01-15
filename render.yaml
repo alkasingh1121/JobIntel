@@ -4,6 +4,8 @@ services:
     env: node
     plan: free
     region: oregon
+    buildCommand: "npm ci && npm run build -w backend"
+    startCommand: "npm start --prefix backend"
     autoDeploy: true
     envVars:
       - key: MONGO_URI
